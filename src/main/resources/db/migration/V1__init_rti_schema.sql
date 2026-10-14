@@ -53,3 +53,9 @@ CREATE TABLE IF NOT EXISTS status_history (
 );
 
 CREATE INDEX idx_status_history_request_id ON status_history (request_id);
+
+-- 4. Table: rti_tracking_sequences
+CREATE TABLE IF NOT EXISTS rti_tracking_sequences (
+    sequence_year INT NOT NULL PRIMARY KEY,
+    current_val BIGINT NOT NULL DEFAULT 0
+);
