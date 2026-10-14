@@ -30,4 +30,12 @@ public interface RtiRequestRepository extends JpaRepository<RtiRequest, Long> {
      * Retrieve requests matching any of the given statuses (e.g. pending reviewer queue).
      */
     List<RtiRequest> findByCurrentStatusInOrderByCreatedAtAsc(List<RequestStatus> statuses);
+
+    /**
+     * Retrieve an RTI Request by ID with a pessimistic write lock (SELECT ... FOR UPDATE)
+     * to protect state transitions from concurrent races.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM RtiRequest r WHERE r.id = :id")
+    Optional<RtiRequest> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
 }
