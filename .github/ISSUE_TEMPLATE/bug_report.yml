@@ -1,0 +1,59 @@
+name: Bug Report
+description: Report a bug, broken build, failed pipeline, or test failure
+title: "[BUG]: <short description>"
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide detailed information to help triage and reproduce the defect.
+
+  - type: input
+    id: affected_component
+    attributes:
+      label: Affected Component
+      description: Specify the component (e.g., Spring Boot, Selenium, Jenkins, Docker, Ansible, Web UI).
+      placeholder: "e.g., Selenium E2E Suite"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to reproduce the failure.
+      placeholder: |
+        1. Run 'mvn test'
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: What should have occurred.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior & Error Logs
+      description: Paste relevant stack traces, console outputs, or error messages.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Execution Environment
+      options:
+        - Local Development (Windows / PowerShell)
+        - Jenkins CI Container Agent
+        - Docker Compose Runtime
+        - WSL2 / Ansible Node
+    validations:
+      required: true

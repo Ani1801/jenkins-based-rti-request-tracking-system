@@ -1,0 +1,48 @@
+name: Feature Request
+description: Propose a new feature or enhancement for the RTI Request Tracking System
+title: "[FEAT]: <short description>"
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for submitting a feature request! Please verify that your proposal aligns with the frozen MVP backlog and does not infringe on out-of-scope boundaries.
+
+  - type: input
+    id: mvp_task_id
+    attributes:
+      label: Related MVP Task ID
+      description: Specify the associated MVP task (e.g., MVP-01 through MVP-15) or state if this is post-MVP.
+      placeholder: "e.g., MVP-04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User Story
+      description: Format as "As a <role>, I want <goal>, so that <business value>".
+      placeholder: "As a Citizen, I want..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Provide testable Given-When-Then criteria.
+      placeholder: "Given... When... Then..."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope_check
+    attributes:
+      label: Scope Compliance Check
+      options:
+        - label: I confirm this feature does not require real government APIs or payment gateways.
+          required: true
+        - label: I confirm this feature adheres to the Task 1 academic boundary.
+          required: true
