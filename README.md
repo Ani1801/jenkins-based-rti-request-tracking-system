@@ -112,7 +112,7 @@ $env:DB_PORT="3306"
 $env:DB_NAME="rti_db"
 $env:DB_USER="rti_user"
 $env:DB_PASSWORD="<SECURE_PASSWORD>"
-java -jar target/rti-tracking-system-1.0.0.jar
+java -jar target/rti-request-tracking-system-1.0.0-SNAPSHOT.jar
 
 # 5. Launch full stack via Docker Compose
 docker compose up -d --build
