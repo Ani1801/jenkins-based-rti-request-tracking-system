@@ -237,4 +237,109 @@ class ReviewerWorkflowServiceTests {
                 "Valid remarks"
         )).isInstanceOf(RequestNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("Should reject direct transition from SUBMITTED to REJECTED skipping UNDER_REVIEW")
+    void shouldRejectDirectRejectionFromSubmitted() {
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request1.getId(),
+                RequestStatus.REJECTED,
+                "officer_patil",
+                "Direct rejection attempt"
+        )).isInstanceOf(InvalidStateTransitionException.class)
+          .hasMessageContaining("Invalid state transition from SUBMITTED to REJECTED");
+    }
+
+    @Test
+    @DisplayName("Should reject backward transition from UNDER_REVIEW to SUBMITTED")
+    void shouldRejectBackwardTransitionFromUnderReviewToSubmitted() {
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request2.getId(),
+                RequestStatus.SUBMITTED,
+                "officer_patil",
+                "Attempting backward transition"
+        )).isInstanceOf(InvalidStateTransitionException.class)
+          .hasMessageContaining("Invalid state transition from UNDER_REVIEW to SUBMITTED");
+    }
+
+    @Test
+    @DisplayName("Should reject any transition attempt once request is in REJECTED state")
+    void shouldRejectTransitionFromRejectedTerminalState() {
+        reviewerWorkflowService.processDecision(
+                request2.getId(),
+                RequestStatus.REJECTED,
+                "officer_patil",
+                "Rejection decision"
+        );
+
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request2.getId(),
+                RequestStatus.APPROVED,
+                "officer_patil",
+                "Attempting to approve rejected request"
+        )).isInstanceOf(InvalidStateTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("Should reject same-state transition attempts")
+    void shouldRejectSameStateTransitions() {
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request2.getId(),
+                RequestStatus.UNDER_REVIEW,
+                "officer_patil",
+                "Attempting same-state transition"
+        )).isInstanceOf(InvalidStateTransitionException.class);
+    }
+
+    @Test
+    @DisplayName("Should reject null target status with IllegalArgumentException")
+    void shouldRejectNullTargetStatus() {
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request1.getId(),
+                null,
+                "officer_patil",
+                "Remarks"
+        )).isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("Target status must not be null");
+    }
+
+    @Test
+    @DisplayName("Should reject null reviewer username and null remarks")
+    void shouldRejectNullReviewerOrRemarks() {
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request1.getId(),
+                RequestStatus.UNDER_REVIEW,
+                null,
+                "Valid remarks"
+        )).isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("Reviewer username must not be blank");
+
+        assertThatThrownBy(() -> reviewerWorkflowService.processDecision(
+                request1.getId(),
+                RequestStatus.UNDER_REVIEW,
+                "officer1",
+                null
+        )).isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("Decision remarks must not be blank");
+    }
+
+    @Test
+    @DisplayName("Should trim reviewer username and remarks before persistence")
+    void shouldTrimReviewerAndRemarksBeforePersistence() {
+        ReviewDecisionResponseDto response = reviewerWorkflowService.processDecision(
+                request2.getId(),
+                RequestStatus.APPROVED,
+                "   officer_trimmed   ",
+                "   Trimmed approval remarks   "
+        );
+
+        assertThat(response.getReviewerUsername()).isEqualTo("officer_trimmed");
+        ReviewDecision decision = decisionRepository.findByRequestIdOrderByDecidedAtAsc(request2.getId()).get(0);
+        assertThat(decision.getReviewerUsername()).isEqualTo("officer_trimmed");
+        assertThat(decision.getRemarks()).isEqualTo("Trimmed approval remarks");
+
+        StatusHistory history = historyRepository.findByRequestIdOrderByTimestampAsc(request2.getId()).get(0);
+        assertThat(history.getActionBy()).isEqualTo("REVIEWER:officer_trimmed");
+        assertThat(history.getRemarks()).isEqualTo("Trimmed approval remarks");
+    }
 }

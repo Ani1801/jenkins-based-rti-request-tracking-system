@@ -133,4 +133,109 @@ class RequestServiceTests {
 
         assertThat(requestRepository.count()).isZero();
     }
+
+    @Test
+    @DisplayName("Should reject submission with blank applicant name")
+    void shouldRejectBlankApplicantName() {
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "   ",
+                "jane@example.com",
+                "9876543210",
+                "ACADEMIC",
+                "Requesting official syllabus for Computer Science 2026."
+        );
+
+        assertThatThrownBy(() -> requestService.submitRequest(dto))
+                .isInstanceOf(ConstraintViolationException.class)
+                .hasMessageContaining("Applicant name is required");
+
+        assertThat(requestRepository.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("Should accept phone number prefixed with valid +91 country code")
+    void shouldAcceptPhoneWithPlus91Prefix() {
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "John Smith",
+                "john.smith@example.com",
+                "+919876543210",
+                "EXAMINATION",
+                "Requesting marks re-evaluation criteria for Semester 5."
+        );
+
+        SubmissionResponseDto response = requestService.submitRequest(dto);
+
+        assertThat(response.isSuccess()).isTrue();
+        RtiRequest saved = requestRepository.findByTrackingId(response.getTrackingId()).orElseThrow();
+        assertThat(saved.getApplicantPhone()).isEqualTo("+919876543210");
+    }
+
+    @Test
+    @DisplayName("Should reject phone number starting with digit lower than 6")
+    void shouldRejectPhoneStartingWithInvalidDigit() {
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "John Smith",
+                "john.smith@example.com",
+                "5876543210", // starts with 5
+                "EXAMINATION",
+                "Requesting marks re-evaluation criteria for Semester 5."
+        );
+
+        assertThatThrownBy(() -> requestService.submitRequest(dto))
+                .isInstanceOf(ConstraintViolationException.class)
+                .hasMessageContaining("Phone number must be a valid 10-digit number");
+    }
+
+    @Test
+    @DisplayName("Should reject submission with blank category")
+    void shouldRejectBlankCategory() {
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "John Smith",
+                "john.smith@example.com",
+                "9876543210",
+                "   ",
+                "Requesting marks re-evaluation criteria for Semester 5."
+        );
+
+        assertThatThrownBy(() -> requestService.submitRequest(dto))
+                .isInstanceOf(ConstraintViolationException.class)
+                .hasMessageContaining("Request category is required");
+    }
+
+    @Test
+    @DisplayName("Should reject description exceeding 2000 characters")
+    void shouldRejectLongDescription() {
+        String longDescription = "A".repeat(2001);
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "John Smith",
+                "john.smith@example.com",
+                "9876543210",
+                "ACADEMIC",
+                longDescription
+        );
+
+        assertThatThrownBy(() -> requestService.submitRequest(dto))
+                .isInstanceOf(ConstraintViolationException.class)
+                .hasMessageContaining("Description must be between 20 and 2000 characters");
+    }
+
+    @Test
+    @DisplayName("Should trim strings and lowercase applicant email upon persistence")
+    void shouldTrimAndNormalizeInputFields() {
+        RequestSubmissionDto dto = new RequestSubmissionDto(
+                "   Jane Doe   ",
+                "JANE.DOE@Example.COM",
+                "9876543210",
+                "  ACADEMIC  ",
+                "   Requesting official syllabus for Computer Science 2026.   "
+        );
+
+        SubmissionResponseDto response = requestService.submitRequest(dto);
+
+        RtiRequest saved = requestRepository.findByTrackingId(response.getTrackingId()).orElseThrow();
+        assertThat(saved.getApplicantName()).isEqualTo("Jane Doe");
+        assertThat(saved.getApplicantEmail()).isEqualTo("jane.doe@example.com");
+        assertThat(saved.getCategory()).isEqualTo("ACADEMIC");
+        assertThat(saved.getDescription()).isEqualTo("Requesting official syllabus for Computer Science 2026.");
+    }
 }

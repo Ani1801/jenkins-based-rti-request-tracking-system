@@ -4,6 +4,7 @@ import com.college.rti.model.RequestStatus;
 import com.college.rti.model.ReviewDecision;
 import com.college.rti.model.RtiRequest;
 import com.college.rti.model.StatusHistory;
+import com.college.rti.model.TrackingSequence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ class RtiDomainRepositoryTests {
     @Autowired
     private StatusHistoryRepository historyRepository;
 
+    @Autowired
+    private TrackingSequenceRepository sequenceRepository;
+
     private RtiRequest sampleRequest;
 
     @BeforeEach
@@ -36,6 +40,7 @@ class RtiDomainRepositoryTests {
         historyRepository.deleteAll();
         decisionRepository.deleteAll();
         requestRepository.deleteAll();
+        sequenceRepository.deleteAll();
 
         sampleRequest = new RtiRequest(
                 "RTI-2026-000001",
@@ -163,5 +168,46 @@ class RtiDomainRepositoryTests {
                 List.of(RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW)
         );
         assertThat(activeQueue).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Should successfully retrieve request with pessimistic lock query")
+    void shouldFindRequestByIdWithPessimisticLock() {
+        RtiRequest saved = requestRepository.save(sampleRequest);
+
+        Optional<RtiRequest> locked = requestRepository.findByIdForUpdate(saved.getId());
+
+        assertThat(locked).isPresent();
+        assertThat(locked.get().getTrackingId()).isEqualTo("RTI-2026-000001");
+    }
+
+    @Test
+    @DisplayName("Should save, find and update TrackingSequence entity with pessimistic lock query")
+    void shouldSaveAndRetrieveTrackingSequenceForUpdate() {
+        TrackingSequence seq = new TrackingSequence(2026, 50L);
+        sequenceRepository.saveAndFlush(seq);
+
+        Optional<TrackingSequence> found = sequenceRepository.findBySequenceYearForUpdate(2026);
+        assertThat(found).isPresent();
+        assertThat(found.get().getCurrentVal()).isEqualTo(50L);
+
+        Optional<TrackingSequence> nonExistent = sequenceRepository.findBySequenceYearForUpdate(2099);
+        assertThat(nonExistent).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should return empty list when no history exists for a given tracking ID")
+    void shouldReturnEmptyWhenTrackingIdDoesNotExistInHistory() {
+        List<StatusHistory> history = historyRepository.findByRequestTrackingIdOrderByTimestampAsc("RTI-9999-000000");
+        assertThat(history).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should return empty list when querying for status with no matching requests")
+    void shouldReturnEmptyListWhenNoRequestsMatchStatus() {
+        requestRepository.save(sampleRequest);
+
+        List<RtiRequest> closed = requestRepository.findByCurrentStatusOrderByCreatedAtAsc(RequestStatus.CLOSED);
+        assertThat(closed).isEmpty();
     }
 }

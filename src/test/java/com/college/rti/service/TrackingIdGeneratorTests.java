@@ -91,4 +91,27 @@ class TrackingIdGeneratorTests {
 
         assertThat(generatedIds).hasSize(threadCount);
     }
+
+    @Test
+    @DisplayName("Should maintain independent sequence numbers across different calendar years")
+    void shouldMaintainIndependentSequencesAcrossYears() {
+        String id2025_1 = trackingIdGenerator.generateNextTrackingId(2025);
+        String id2026_1 = trackingIdGenerator.generateNextTrackingId(2026);
+        String id2025_2 = trackingIdGenerator.generateNextTrackingId(2025);
+        String id2026_2 = trackingIdGenerator.generateNextTrackingId(2026);
+
+        assertThat(id2025_1).isEqualTo("RTI-2025-000001");
+        assertThat(id2026_1).isEqualTo("RTI-2026-000001");
+        assertThat(id2025_2).isEqualTo("RTI-2025-000002");
+        assertThat(id2026_2).isEqualTo("RTI-2026-000002");
+    }
+
+    @Test
+    @DisplayName("Should generate monotonic sequential IDs in single-threaded invocations")
+    void shouldGenerateMonotonicSequentialIds() {
+        for (int i = 1; i <= 5; i++) {
+            String id = trackingIdGenerator.generateNextTrackingId(2029);
+            assertThat(id).isEqualTo(String.format("RTI-2029-%06d", i));
+        }
+    }
 }

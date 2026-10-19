@@ -188,4 +188,16 @@ class StatusInquiryServiceTests {
         assertThat(response.getTrackingId()).isEqualTo("RTI-2026-999001");
         assertThat(response.getHistory()).isNotNull().isEmpty();
     }
+
+    @Test
+    @DisplayName("Should successfully retrieve request when tracking ID has surrounding whitespace")
+    void shouldTrimTrackingIdParameterWhenSearching() {
+        requestRepository.save(testRequest);
+
+        StatusTrackingResponseDto response = statusInquiryService.trackRequest("   RTI-2026-999001   ");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTrackingId()).isEqualTo("RTI-2026-999001");
+        assertThat(response.getCategory()).isEqualTo("INFRASTRUCTURE");
+    }
 }
