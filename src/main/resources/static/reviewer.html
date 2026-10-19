@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reviewer Portal | RTI Request Tracking System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header class="navbar">
+        <a href="/" class="nav-brand" id="brandHomeLink">
+            <span class="badge-icon">RTI</span>
+            <span>RTI Tracking System</span>
+        </a>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="/" class="nav-link" id="navSubmit">File Request</a></li>
+                <li><a href="/track.html" class="nav-link" id="navTrack">Track Status</a></li>
+                <li><a href="/reviewer.html" class="nav-link active" id="navReviewer">Reviewer Portal</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="hero-header">
+            <div class="hero-pill">Administrative Portal</div>
+            <h1>RTI Reviewer Queue & State Machine</h1>
+            <p>Inspect incoming applications, manage triage lifecycle transitions, and record official reviewer determinations with required audit remarks.</p>
+        </section>
+
+        <!-- Environment Boundary Banner -->
+        <div class="alert alert-warning" id="authNoticeBanner">
+            <div>
+                <div class="alert-title">Administrative MVP Test Mode</div>
+                <div>Reviewer operations operate in test-isolated mode prior to Spring Security credential binding.</div>
+            </div>
+        </div>
+
+        <!-- Global Reviewer Alert -->
+        <div id="reviewerAlert" class="alert alert-success hidden" role="alert">
+            <div>
+                <div id="alertTitle" class="alert-title">Decision Recorded</div>
+                <div id="alertMessage">Request state transition successfully committed.</div>
+            </div>
+        </div>
+
+        <!-- Queue Card -->
+        <div class="card" id="queueCard">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                <h2 class="card-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">
+                    <span>Pending Applications Queue</span>
+                </h2>
+                <button type="button" id="refreshQueueBtn" class="btn btn-secondary btn-sm" onclick="loadQueue()">
+                    <span>Refresh Queue</span>
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table id="reviewerQueueTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tracking ID</th>
+                            <th>Applicant</th>
+                            <th>Category</th>
+                            <th>Current Status</th>
+                            <th>Submitted At</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reviewerQueueBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="queueEmptyMessage" class="hidden" style="text-align: center; padding: 2rem; color: var(--text-dim);">
+                No pending requests found in queue.
+            </div>
+        </div>
+
+        <!-- Request Details and Decision Card -->
+        <div id="decisionPanel" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1.5rem;">
+                <h2 class="card-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">
+                    <span>Review Application: </span>
+                    <span id="selectedTrackingId" style="font-family: monospace; color: #818cf8; margin-left: 0.5rem;">-</span>
+                </h2>
+                <button type="button" id="closePanelBtn" class="btn btn-secondary btn-sm" onclick="closeDecisionPanel()">Close Details</button>
+            </div>
+
+            <input type="hidden" id="selectedRequestId">
+
+            <!-- Request Metadata Grid -->
+            <div class="form-grid" style="margin-bottom: 1.5rem;">
+                <div>
+                    <label>Applicant Full Name</label>
+                    <div id="selectedApplicantName" style="font-weight: 600; margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Applicant Contact Email</label>
+                    <div id="selectedApplicantEmail" style="color: var(--text-muted); margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Applicant Contact Phone</label>
+                    <div id="selectedApplicantPhone" style="color: var(--text-muted); margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Request Category</label>
+                    <div id="selectedCategory" style="font-weight: 600; margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Current Status</label>
+                    <div style="margin-top: 0.25rem;">
+                        <span id="selectedCurrentStatus" class="status-badge status-SUBMITTED">SUBMITTED</span>
+                    </div>
+                </div>
+                <div class="form-group-full">
+                    <label>Narrative Request Description</label>
+                    <div id="selectedDescription" style="background: rgba(0,0,0,0.25); padding: 0.85rem; border-radius: var(--radius-sm); margin-top: 0.35rem; color: var(--text-main); font-size: 0.925rem;">-</div>
+                </div>
+            </div>
+
+            <!-- Decision Form -->
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-main);">
+                Execute Administrative Decision
+            </h3>
+
+            <form id="decisionForm" onsubmit="submitDecision(event)" novalidate>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="targetStatusSelect">Target State Machine Transition <span class="required-star">*</span></label>
+                        <select id="targetStatusSelect" name="targetStatus" required>
+                            <option value="UNDER_REVIEW">UNDER_REVIEW (Triage / Verification)</option>
+                            <option value="APPROVED">APPROVED (Grant Information)</option>
+                            <option value="REJECTED">REJECTED (Deny / Exemption)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reviewerUsername">Reviewer Username <span class="required-star">*</span></label>
+                        <input type="text" id="reviewerUsername" name="reviewerUsername" value="officer_sharma" required maxlength="50">
+                    </div>
+
+                    <div class="form-group form-group-full">
+                        <label for="remarksInput">Mandatory Administrative Remarks <span class="required-star">*</span></label>
+                        <textarea id="remarksInput" name="remarks" placeholder="Provide justification or administrative disposition details..." required></textarea>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="submit" id="confirmDecisionBtn" class="btn btn-primary">
+                        <span>Commit State Transition</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <footer>
+        <p>Jenkins-Based RTI Request Tracking System &copy; 2026 Academic DevOps Project. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        let cachedRequests = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadQueue();
+        });
+
+        async function loadQueue() {
+            const tableBody = document.getElementById('reviewerQueueBody');
+            const emptyMsg = document.getElementById('queueEmptyMessage');
+            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Loading reviewer queue...</td></tr>';
+
+            try {
+                const response = await fetch('/api/v1/reviewer/requests');
+                if (response.ok) {
+                    cachedRequests = await response.json();
+                    renderQueueTable(cachedRequests);
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #f87171;">Failed to load queue.</td></tr>';
+                }
+            } catch (err) {
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #f87171;">Network error connecting to API.</td></tr>';
+            }
+        }
+
+        function renderQueueTable(requests) {
+            const tableBody = document.getElementById('reviewerQueueBody');
+            const emptyMsg = document.getElementById('queueEmptyMessage');
+            tableBody.innerHTML = '';
+
+            if (!requests || requests.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+
+            emptyMsg.classList.add('hidden');
+
+            requests.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.id = `queueRow-${r.id}`;
+                tr.innerHTML = `
+                    <td>${r.id}</td>
+                    <td style="font-family: monospace; font-weight: 600; color: #818cf8;">${r.trackingId}</td>
+                    <td>${escapeHtml(r.applicantName)}</td>
+                    <td>${escapeHtml(r.category)}</td>
+                    <td><span class="status-badge status-${r.currentStatus}">${r.currentStatus}</span></td>
+                    <td style="color: var(--text-dim); font-size: 0.85rem;">${new Date(r.createdAt).toLocaleString()}</td>
+                    <td>
+                        <button type="button" id="reviewBtn-${r.id}" class="btn btn-secondary btn-sm" onclick="selectRequest(${r.id})">
+                            Inspect & Review
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function selectRequest(id) {
+            const item = cachedRequests.find(r => r.id === id);
+            if (!item) return;
+
+            document.getElementById('selectedRequestId').value = item.id;
+            document.getElementById('selectedTrackingId').textContent = item.trackingId;
+            document.getElementById('selectedApplicantName').textContent = item.applicantName;
+            document.getElementById('selectedApplicantEmail').textContent = item.applicantEmail;
+            document.getElementById('selectedApplicantPhone').textContent = item.applicantPhone;
+            document.getElementById('selectedCategory').textContent = item.category;
+            document.getElementById('selectedDescription').textContent = item.description;
+
+            const statusBadge = document.getElementById('selectedCurrentStatus');
+            statusBadge.textContent = item.currentStatus;
+            statusBadge.className = `status-badge status-${item.currentStatus}`;
+
+            // Reset decision inputs
+            document.getElementById('remarksInput').value = '';
+            
+            // Set reasonable default next transition
+            const selectElem = document.getElementById('targetStatusSelect');
+            if (item.currentStatus === 'SUBMITTED') {
+                selectElem.value = 'UNDER_REVIEW';
+            } else if (item.currentStatus === 'UNDER_REVIEW') {
+                selectElem.value = 'APPROVED';
+            }
+
+            const panel = document.getElementById('decisionPanel');
+            panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closeDecisionPanel() {
+            document.getElementById('decisionPanel').classList.add('hidden');
+        }
+
+        async function submitDecision(e) {
+            e.preventDefault();
+            const alertElem = document.getElementById('reviewerAlert');
+            const alertTitle = document.getElementById('alertTitle');
+            const alertMessage = document.getElementById('alertMessage');
+            const submitBtn = document.getElementById('confirmDecisionBtn');
+
+            const requestId = document.getElementById('selectedRequestId').value;
+            const targetStatus = document.getElementById('targetStatusSelect').value;
+            const reviewerUsername = document.getElementById('reviewerUsername').value.trim();
+            const remarks = document.getElementById('remarksInput').value.trim();
+
+            if (!remarks) {
+                showAlert(false, 'Validation Error', 'Decision remarks must not be blank.');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+
+            try {
+                const response = await fetch(`/api/v1/reviewer/requests/${requestId}/decision`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetStatus,
+                        reviewerUsername,
+                        remarks
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showAlert(true, 'Transition Committed', data.message || `Request successfully transitioned to ${targetStatus}`);
+                    // Update current selected request status badge
+                    const statusBadge = document.getElementById('selectedCurrentStatus');
+                    statusBadge.textContent = targetStatus;
+                    statusBadge.className = `status-badge status-${targetStatus}`;
+                    
+                    // Reload queue
+                    await loadQueue();
+
+                    // If terminal (APPROVED or REJECTED), the item drops out of pending queue
+                    if (targetStatus === 'APPROVED' || targetStatus === 'REJECTED') {
+                        closeDecisionPanel();
+                    } else {
+                        // If moved to UNDER_REVIEW, update cached request
+                        const cached = cachedRequests.find(r => r.id === parseInt(requestId));
+                        if (cached) {
+                            cached.currentStatus = targetStatus;
+                        }
+                    }
+                } else {
+                    showAlert(false, 'Transition Rejected', data.message || 'State machine transition could not be completed.');
+                }
+            } catch (err) {
+                showAlert(false, 'Network Error', 'Could not reach server to commit transition.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Commit State Transition';
+            }
+        }
+
+        function showAlert(isSuccess, title, message) {
+            const alertElem = document.getElementById('reviewerAlert');
+            const alertTitle = document.getElementById('alertTitle');
+            const alertMessage = document.getElementById('alertMessage');
+
+            alertElem.className = isSuccess ? 'alert alert-success' : 'alert alert-error';
+            alertTitle.textContent = title;
+            alertMessage.textContent = message;
+            alertElem.classList.remove('hidden');
+
+            alertElem.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>

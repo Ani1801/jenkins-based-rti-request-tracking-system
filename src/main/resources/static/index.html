@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File RTI Request | RTI Request Tracking System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header class="navbar">
+        <a href="/" class="nav-brand" id="brandHomeLink">
+            <span class="badge-icon">RTI</span>
+            <span>RTI Tracking System</span>
+        </a>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="/" class="nav-link active" id="navSubmit">File Request</a></li>
+                <li><a href="/track.html" class="nav-link" id="navTrack">Track Status</a></li>
+                <li><a href="/reviewer.html" class="nav-link" id="navReviewer">Reviewer Portal</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="hero-header">
+            <div class="hero-pill">Academic DevOps Simulation</div>
+            <h1>File an RTI Application</h1>
+            <p>Submit a formal inquiry under the Right to Information process. Your application will be queued for administrative review and assigned a unique tracking token.</p>
+        </section>
+
+        <!-- Validation & Error Banner -->
+        <div id="validationErrors" class="alert alert-error hidden" role="alert">
+            <div>
+                <div class="alert-title">Submission Error</div>
+                <div id="errorMessage">Please check your inputs and try again.</div>
+            </div>
+        </div>
+
+        <!-- Submission Success Banner -->
+        <div id="submissionSuccess" class="alert alert-success hidden" role="alert">
+            <div>
+                <div class="alert-title">Application Submitted Successfully!</div>
+                <p>Your RTI request has been registered in the system. Please preserve your unique Tracking ID for future status inquiries.</p>
+                <div class="tracking-token-box">
+                    <div class="tracking-token-label">Assigned Tracking Identifier</div>
+                    <div id="trackingIdDisplay" class="tracking-token-value">RTI-YYYY-XXXXXX</div>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+                    <a href="/track.html" id="trackRequestLink" class="btn btn-primary btn-sm">Track Application Now</a>
+                    <button type="button" id="fileAnotherBtn" class="btn btn-secondary btn-sm" onclick="resetForm()">File Another Request</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Request Submission Form -->
+        <div class="card" id="formCard">
+            <h2 class="card-title">
+                <span>Application Details</span>
+            </h2>
+            <form id="rtiSubmissionForm" novalidate>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="applicantName">Applicant Full Name <span class="required-star">*</span></label>
+                        <input type="text" id="applicantName" name="applicantName" placeholder="e.g. Rahul Sharma" required maxlength="100">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="applicantEmail">Email Address <span class="required-star">*</span></label>
+                        <input type="email" id="applicantEmail" name="applicantEmail" placeholder="e.g. rahul@example.com" required maxlength="150">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="applicantPhone">Phone Number <span class="required-star">*</span></label>
+                        <input type="tel" id="applicantPhone" name="applicantPhone" placeholder="10-digit number e.g. 9876543210" required maxlength="13">
+                        <span class="field-hint">10 digits, optionally prefixed with +91</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="category">Information Category <span class="required-star">*</span></label>
+                        <select id="category" name="category" required>
+                            <option value="">-- Select Category --</option>
+                            <option value="ACADEMIC">Academic Records & Examination</option>
+                            <option value="ADMINISTRATIVE">Administrative Operations</option>
+                            <option value="INFRASTRUCTURE">Campus Infrastructure & Facilities</option>
+                            <option value="FINANCIAL">Financial & Scholarship Inquiries</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group form-group-full">
+                        <label for="description">Information Requested (Description) <span class="required-star">*</span></label>
+                        <textarea id="description" name="description" placeholder="Specify clearly the exact records, reports, or documentation requested (20 to 2000 characters)..." required minlength="20" maxlength="2000"></textarea>
+                        <span class="field-hint" id="charCountHint">Minimum 20 characters required.</span>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn btn-primary btn-full">
+                    <span>Submit RTI Application</span>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <footer>
+        <p>Jenkins-Based RTI Request Tracking System &copy; 2026 Academic DevOps Project. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        const form = document.getElementById('rtiSubmissionForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const validationAlert = document.getElementById('validationErrors');
+        const errorMessage = document.getElementById('errorMessage');
+        const successAlert = document.getElementById('submissionSuccess');
+        const trackingIdDisplay = document.getElementById('trackingIdDisplay');
+        const trackRequestLink = document.getElementById('trackRequestLink');
+        const formCard = document.getElementById('formCard');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            validationAlert.classList.add('hidden');
+
+            const applicantName = document.getElementById('applicantName').value.trim();
+            const applicantEmail = document.getElementById('applicantEmail').value.trim();
+            const applicantPhone = document.getElementById('applicantPhone').value.trim();
+            const category = document.getElementById('category').value.trim();
+            const description = document.getElementById('description').value.trim();
+
+            // Client-side validation checks
+            const errors = [];
+            if (!applicantName) errors.push("Applicant name is required.");
+            if (!applicantEmail) {
+                errors.push("Applicant email is required.");
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
+                errors.push("Must be a well-formed email address.");
+            }
+            if (!applicantPhone) {
+                errors.push("Applicant phone number is required.");
+            } else if (!/^(\+91)?[6-9]\d{9}$/.test(applicantPhone)) {
+                errors.push("Phone number must be a valid 10-digit number.");
+            }
+            if (!category) errors.push("Request category is required.");
+            if (!description) {
+                errors.push("Request description is required.");
+            } else if (description.length < 20) {
+                errors.push("Description must be at least 20 characters long.");
+            }
+
+            if (errors.length > 0) {
+                errorMessage.innerHTML = errors.map(err => `<div>• ${err}</div>`).join('');
+                validationAlert.classList.remove('hidden');
+                return;
+            }
+
+            // Submit payload
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting Application...';
+
+            try {
+                const response = await fetch('/api/v1/requests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        applicantName,
+                        applicantEmail,
+                        applicantPhone,
+                        category,
+                        description
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    formCard.classList.add('hidden');
+                    trackingIdDisplay.textContent = data.trackingId;
+                    trackRequestLink.href = `/track.html?trackingId=${encodeURIComponent(data.trackingId)}`;
+                    successAlert.classList.remove('hidden');
+                } else {
+                    let errMsg = data.message || "Failed to submit request.";
+                    if (data.errors) {
+                        errMsg = Object.values(data.errors).join('<br>• ');
+                    }
+                    errorMessage.innerHTML = errMsg;
+                    validationAlert.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorMessage.textContent = 'Network or server error occurred. Please try again.';
+                validationAlert.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit RTI Application';
+            }
+        });
+
+        function resetForm() {
+            form.reset();
+            formCard.classList.remove('hidden');
+            successAlert.classList.add('hidden');
+            validationAlert.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

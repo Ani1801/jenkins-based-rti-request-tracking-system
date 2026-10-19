@@ -174,4 +174,23 @@ class DtoAndExceptionTests {
         assertThat(ex.getMessage()).isEqualTo("No RTI request found matching tracking identifier RTI-2026-000999");
         assertThat(ex.getTrackingId()).isEqualTo("RTI-2026-000999");
     }
+
+    @Test
+    @DisplayName("DecisionRequestDto: should support getters, setters, and decision helper")
+    void testDecisionRequestDto() {
+        DecisionRequestDto dto = new DecisionRequestDto();
+        dto.setTargetStatus(RequestStatus.UNDER_REVIEW);
+        dto.setReviewerUsername("officer1");
+        dto.setRemarks("Valid remarks");
+
+        assertThat(dto.getTargetStatus()).isEqualTo(RequestStatus.UNDER_REVIEW);
+        assertThat(dto.getReviewerUsername()).isEqualTo("officer1");
+        assertThat(dto.getRemarks()).isEqualTo("Valid remarks");
+
+        DecisionRequestDto full = new DecisionRequestDto(RequestStatus.APPROVED, "officer2", "Approved records");
+        assertThat(full.getTargetStatus()).isEqualTo(RequestStatus.APPROVED);
+
+        dto.setDecision("REJECTED");
+        assertThat(dto.getTargetStatus()).isEqualTo(RequestStatus.REJECTED);
+    }
 }

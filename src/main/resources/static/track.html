@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track RTI Status | RTI Request Tracking System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header class="navbar">
+        <a href="/" class="nav-brand" id="brandHomeLink">
+            <span class="badge-icon">RTI</span>
+            <span>RTI Tracking System</span>
+        </a>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="/" class="nav-link" id="navSubmit">File Request</a></li>
+                <li><a href="/track.html" class="nav-link active" id="navTrack">Track Status</a></li>
+                <li><a href="/reviewer.html" class="nav-link" id="navReviewer">Reviewer Portal</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="hero-header">
+            <div class="hero-pill">Public Status Inquiry</div>
+            <h1>Track Your RTI Application</h1>
+            <p>Enter your assigned Tracking ID to inspect the current lifecycle status and immutable administrative timeline. Applicant personal data is strictly protected and omitted.</p>
+        </section>
+
+        <!-- Search Card -->
+        <div class="card">
+            <form id="trackForm" onsubmit="handleTrack(event)">
+                <div class="form-group">
+                    <label for="trackingIdInput">Tracking Identifier <span class="required-star">*</span></label>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <input type="text" id="trackingIdInput" name="trackingId" placeholder="e.g. RTI-2026-A8F93B" required style="flex: 1;" autocomplete="off">
+                        <button type="submit" id="trackBtn" class="btn btn-primary">Track Status</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="trackError" class="alert alert-error hidden" role="alert">
+            <div>
+                <div class="alert-title">Tracking Request Failed</div>
+                <div id="trackErrorMessage">No RTI request found matching tracking identifier.</div>
+            </div>
+        </div>
+
+        <!-- Result Card -->
+        <div id="trackResult" class="card hidden">
+            <div class="card-title">
+                <span>Application Status & Public Timeline</span>
+            </div>
+
+            <div class="form-grid" style="margin-bottom: 2rem;">
+                <div>
+                    <label>Tracking Identifier</label>
+                    <div id="resultTrackingId" class="tracking-token-value" style="font-size: 1.25rem; text-align: left; margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Subject Category</label>
+                    <div id="categoryDisplay" style="font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem;">-</div>
+                </div>
+                <div>
+                    <label>Current Lifecycle Status</label>
+                    <div style="margin-top: 0.25rem;">
+                        <span id="statusDisplay" class="status-badge status-SUBMITTED">SUBMITTED</span>
+                    </div>
+                </div>
+                <div>
+                    <label>Filing Timestamp</label>
+                    <div id="submittedAtDisplay" style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem;">-</div>
+                </div>
+            </div>
+
+            <!-- Public Chronological Audit Trail -->
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-main);">
+                Public Status Audit Trail
+            </h3>
+            <div id="historyTimeline" class="timeline">
+                <!-- Timeline items injected here -->
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Jenkins-Based RTI Request Tracking System &copy; 2026 Academic DevOps Project. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        // Check URL query param on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('trackingId');
+            if (token) {
+                document.getElementById('trackingIdInput').value = token;
+                fetchTracking(token);
+            }
+        });
+
+        function handleTrack(e) {
+            e.preventDefault();
+            const token = document.getElementById('trackingIdInput').value.trim();
+            if (token) {
+                fetchTracking(token);
+            }
+        }
+
+        async function fetchTracking(token) {
+            const trackBtn = document.getElementById('trackBtn');
+            const errorAlert = document.getElementById('trackError');
+            const errorMessage = document.getElementById('trackErrorMessage');
+            const resultCard = document.getElementById('trackResult');
+
+            trackBtn.disabled = true;
+            trackBtn.textContent = 'Searching...';
+            errorAlert.classList.add('hidden');
+            resultCard.classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/v1/requests/track/${encodeURIComponent(token)}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('resultTrackingId').textContent = data.trackingId;
+                    document.getElementById('categoryDisplay').textContent = data.category;
+                    
+                    const statusElem = document.getElementById('statusDisplay');
+                    statusElem.textContent = data.status;
+                    statusElem.className = `status-badge status-${data.status}`;
+                    
+                    document.getElementById('submittedAtDisplay').textContent = new Date(data.submittedAt).toLocaleString();
+
+                    // Render audit history timeline
+                    const timeline = document.getElementById('historyTimeline');
+                    timeline.innerHTML = '';
+
+                    if (data.history && data.history.length > 0) {
+                        data.history.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'timeline-item history-item';
+                            div.innerHTML = `
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-header">
+                                    <span class="timeline-title history-status">${item.fromStatus ? item.fromStatus + ' &rarr; ' : ''}${item.toStatus}</span>
+                                    <span class="timeline-time history-time">${new Date(item.timestamp).toLocaleString()}</span>
+                                </div>
+                                <div class="timeline-remarks history-remarks">${item.remarks || 'No remarks provided.'}</div>
+                            `;
+                            timeline.appendChild(div);
+                        });
+                    } else {
+                        timeline.innerHTML = '<div style="color: var(--text-dim);">No prior status events recorded.</div>';
+                    }
+
+                    resultCard.classList.remove('hidden');
+                } else {
+                    errorMessage.textContent = data.message || `No RTI request found matching tracking identifier "${token}".`;
+                    errorAlert.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorMessage.textContent = 'Server or network error occurred during lookup. Please verify connection.';
+                errorAlert.classList.remove('hidden');
+            } finally {
+                trackBtn.disabled = false;
+                trackBtn.textContent = 'Track Status';
+            }
+        }
+    </script>
+</body>
+</html>
