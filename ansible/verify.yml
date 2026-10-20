@@ -1,0 +1,6 @@
+---
+# =========================================================================
+# Top-Level Entrypoint: verify.yml (Imports playbooks/verify.yml)
+# =========================================================================
+
+- import_playbook: playbooks/verify.yml

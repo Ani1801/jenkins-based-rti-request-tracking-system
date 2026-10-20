@@ -1,0 +1,216 @@
+---
+# =========================================================================
+# Ansible Deployment Playbook: RTI Request Tracking System (MVP-15)
+# Automates multi-container deployment (Spring Boot + MySQL + Nginx) via
+# Docker Compose on a designated Linux deployment host.
+# =========================================================================
+
+- name: Deploy Containerized RTI Request Tracking System
+  hosts: rti_servers
+  gather_facts: true
+
+  tasks:
+    # ---------------------------------------------------------------------
+    # 1. Connectivity & Host Verification
+    # ---------------------------------------------------------------------
+    - name: Verify SSH connectivity to target Linux host
+      ansible.builtin.ping:
+
+    - name: Verify target operating system is Linux
+      ansible.builtin.assert:
+        that:
+          - ansible_system == 'Linux'
+        fail_msg: "Target host {{ inventory_hostname }} is not a Linux operating system (detected: {{ ansible_system }})."
+        success_msg: "Target host OS verified as Linux ({{ ansible_distribution }} {{ ansible_distribution_version }})."
+
+    # ---------------------------------------------------------------------
+    # 2. Docker & Compose Prerequisite Checks
+    # ---------------------------------------------------------------------
+    - name: Check if Docker Engine is installed on target host
+      ansible.builtin.command: docker --version
+      register: docker_version_check
+      changed_when: false
+      failed_when: docker_version_check.rc != 0
+
+    - name: Check if Docker Compose plugin is installed on target host
+      ansible.builtin.command: docker compose version
+      register: compose_version_check
+      changed_when: false
+      failed_when: compose_version_check.rc != 0
+
+    - name: Display detected Docker and Compose versions
+      ansible.builtin.debug:
+        msg:
+          - "Docker Engine: {{ docker_version_check.stdout }}"
+          - "Docker Compose: {{ compose_version_check.stdout }}"
+
+    # ---------------------------------------------------------------------
+    # 3. Create Deployment Directory Structure
+    # ---------------------------------------------------------------------
+    - name: Create root deployment directory on target host
+      ansible.builtin.file:
+        path: "{{ deployment_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0755"
+      become: true
+
+    - name: Create required deployment subdirectories
+      ansible.builtin.file:
+        path: "{{ deployment_dir }}/{{ item }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0755"
+      loop:
+        - "docker"
+        - "docker/nginx"
+        - "src/main/resources/db/migration"
+        - "target"
+
+    # ---------------------------------------------------------------------
+    # 4. Synchronize Application Manifests & Artifacts
+    # ---------------------------------------------------------------------
+    - name: Copy Docker Compose manifest to target host
+      ansible.builtin.copy:
+        src: "../../docker-compose.yml"
+        dest: "{{ deployment_dir }}/docker-compose.yml"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+
+    - name: Copy root Dockerfile to target host
+      ansible.builtin.copy:
+        src: "../../Dockerfile"
+        dest: "{{ deployment_dir }}/Dockerfile"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+
+    - name: Copy docker/Dockerfile to target host
+      ansible.builtin.copy:
+        src: "../../docker/Dockerfile"
+        dest: "{{ deployment_dir }}/docker/Dockerfile"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+
+    - name: Copy Nginx reverse proxy configuration to target host
+      ansible.builtin.copy:
+        src: "../../docker/nginx/nginx.conf"
+        dest: "{{ deployment_dir }}/docker/nginx/nginx.conf"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+
+    - name: Copy database initialization schema migration to target host
+      ansible.builtin.copy:
+        src: "../../src/main/resources/db/migration/V1__init_rti_schema.sql"
+        dest: "{{ deployment_dir }}/src/main/resources/db/migration/V1__init_rti_schema.sql"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+
+    - name: Check if pre-packaged JAR artifact exists locally
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../target/rti-request-tracking-system-1.0.0-SNAPSHOT.jar"
+      register: local_jar_stat
+      delegate_to: localhost
+
+    - name: Copy compiled application JAR to target host (when present)
+      ansible.builtin.copy:
+        src: "../../target/rti-request-tracking-system-1.0.0-SNAPSHOT.jar"
+        dest: "{{ deployment_dir }}/target/rti-request-tracking-system-1.0.0-SNAPSHOT.jar"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0644"
+      when: local_jar_stat.stat.exists
+
+    # ---------------------------------------------------------------------
+    # 5. Environment Configuration Management (Preserving Existing Secrets)
+    # ---------------------------------------------------------------------
+    - name: Check if .env configuration file already exists on target host
+      ansible.builtin.stat:
+        path: "{{ deployment_dir }}/.env"
+      register: target_env_stat
+
+    - name: Deploy .env configuration from template (if missing on target)
+      ansible.builtin.template:
+        src: "../templates/.env.j2"
+        dest: "{{ deployment_dir }}/.env"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_group }}"
+        mode: "0600"
+      when: not target_env_stat.stat.exists
+      no_log: true
+
+    - name: Inform operator that existing .env on target was preserved
+      ansible.builtin.debug:
+        msg: "Preserved existing .env configuration at {{ deployment_dir }}/.env to prevent secret overwrite."
+      when: target_env_stat.stat.exists
+
+    # ---------------------------------------------------------------------
+    # 6. Pre-Flight Validation of Docker Compose Manifest
+    # ---------------------------------------------------------------------
+    - name: Validate Docker Compose configuration on target host
+      ansible.builtin.command: docker compose config
+      args:
+        chdir: "{{ deployment_dir }}"
+      register: compose_config_result
+      changed_when: false
+      failed_when: compose_config_result.rc != 0
+
+    # ---------------------------------------------------------------------
+    # 7. Start / Update Application Stack via Docker Compose
+    # ---------------------------------------------------------------------
+    - name: Launch or update multi-container stack via Docker Compose
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: "{{ deployment_dir }}"
+      register: compose_up_result
+      changed_when: "'Started' in compose_up_result.stdout or 'Recreated' in compose_up_result.stdout or 'Starting' in compose_up_result.stdout"
+
+    # ---------------------------------------------------------------------
+    # 8. Post-Deployment Ingress & Health Verification
+    # ---------------------------------------------------------------------
+    - name: Wait for Nginx ingress and citizen portal to become healthy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/"
+        status_code: 200
+        return_content: yes
+      register: citizen_portal_response
+      until: citizen_portal_response.status == 200
+      retries: "{{ health_check_retries }}"
+      delay: "{{ health_check_delay }}"
+
+    - name: Confirm public status tracking endpoint is reachable
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/track.html"
+        status_code: 200
+
+    - name: Verify security restriction blocks external Actuator endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/actuator/health"
+        status_code: 403
+
+    - name: Verify security restriction blocks external reviewer portal
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/reviewer.html"
+        status_code: 403
+
+    # ---------------------------------------------------------------------
+    # 9. Deployment Summary Reporting
+    # ---------------------------------------------------------------------
+    - name: Output deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "========================================================================="
+          - " SUCCESS: RTI Request Tracking System Deployed Successfully!"
+          - " Target Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - " Deployment Directory: {{ deployment_dir }}"
+          - " Public Ingress URL: http://{{ ansible_host }}:{{ nginx_port }}/"
+          - " Public Tracking URL: http://{{ ansible_host }}:{{ nginx_port }}/track.html"
+          - " Security Isolation: /actuator/ and /reviewer.html blocked with HTTP 403"
+          - " Database Persistence: Named volume 'rti_mysql_data' preserved"
+          - "========================================================================="

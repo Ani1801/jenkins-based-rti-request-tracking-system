@@ -1,0 +1,159 @@
+---
+# =========================================================================
+# Ansible Verification Playbook: RTI Request Tracking System (MVP-15)
+# Validates container health, reverse proxy routing, security restrictions,
+# database volume persistence, and citizen interface accessibility.
+# =========================================================================
+
+- name: Verify Live RTI Request Tracking System Deployment
+  hosts: rti_servers
+  gather_facts: true
+
+  tasks:
+    # ---------------------------------------------------------------------
+    # 1. Connectivity Check
+    # ---------------------------------------------------------------------
+    - name: Verify SSH connectivity to target host
+      ansible.builtin.ping:
+
+    # ---------------------------------------------------------------------
+    # 2. Tooling Availability Checks
+    # ---------------------------------------------------------------------
+    - name: Verify Docker Engine availability on target host
+      ansible.builtin.command: docker --version
+      register: verify_docker_cli
+      changed_when: false
+
+    - name: Verify Docker Compose plugin availability on target host
+      ansible.builtin.command: docker compose version
+      register: verify_compose_cli
+      changed_when: false
+
+    # ---------------------------------------------------------------------
+    # 3. Running Container Status Checks
+    # ---------------------------------------------------------------------
+    - name: Inspect running state of rti-mysql container
+      ansible.builtin.command: docker inspect --format='{{ '{{' }} .State.Status {{ '}}' }}' rti-mysql
+      register: mysql_container_state
+      changed_when: false
+      failed_when: mysql_container_state.stdout | trim != 'running'
+
+    - name: Inspect running state of rti-app container
+      ansible.builtin.command: docker inspect --format='{{ '{{' }} .State.Status {{ '}}' }}' rti-app
+      register: app_container_state
+      changed_when: false
+      failed_when: app_container_state.stdout | trim != 'running'
+
+    - name: Inspect running state of rti-nginx container
+      ansible.builtin.command: docker inspect --format='{{ '{{' }} .State.Status {{ '}}' }}' rti-nginx
+      register: nginx_container_state
+      changed_when: false
+      failed_when: nginx_container_state.stdout | trim != 'running'
+
+    # ---------------------------------------------------------------------
+    # 4. Container Health Checks
+    # ---------------------------------------------------------------------
+    - name: Verify rti-mysql reports healthy status
+      ansible.builtin.command: docker inspect --format='{{ '{{' }} .State.Health.Status {{ '}}' }}' rti-mysql
+      register: mysql_health_status
+      changed_when: false
+      failed_when: mysql_health_status.stdout | trim != 'healthy'
+
+    - name: Verify rti-app reports healthy status
+      ansible.builtin.command: docker inspect --format='{{ '{{' }} .State.Health.Status {{ '}}' }}' rti-app
+      register: app_health_status
+      changed_when: false
+      failed_when: app_health_status.stdout | trim != 'healthy'
+
+    # ---------------------------------------------------------------------
+    # 5. Persistent Volume Verification
+    # ---------------------------------------------------------------------
+    - name: Verify persistent named volume 'rti_mysql_data' exists
+      ansible.builtin.command: docker volume inspect rti_mysql_data
+      register: volume_check
+      changed_when: false
+      failed_when: volume_check.rc != 0
+
+    # ---------------------------------------------------------------------
+    # 6. HTTP Ingress & Citizen Interface Verification
+    # ---------------------------------------------------------------------
+    - name: Query citizen portal root endpoint via Nginx reverse proxy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/"
+        status_code: 200
+        return_content: yes
+      register: citizen_root_response
+
+    - name: Assert citizen filing form fields are present in HTML DOM
+      ansible.builtin.assert:
+        that:
+          - "'applicantName' in citizen_root_response.content"
+          - "'applicantEmail' in citizen_root_response.content"
+          - "'applicantPhone' in citizen_root_response.content"
+          - "'category' in citizen_root_response.content"
+          - "'description' in citizen_root_response.content"
+        fail_msg: "Citizen submission form DOM elements are missing from the public HTML response."
+        success_msg: "Citizen submission form DOM elements verified in public HTML response."
+
+    - name: Query citizen tracking endpoint via Nginx reverse proxy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/track.html"
+        status_code: 200
+        return_content: yes
+      register: citizen_track_response
+
+    - name: Assert public tracking DOM fields are present in HTML
+      ansible.builtin.assert:
+        that:
+          - "'trackingIdInput' in citizen_track_response.content"
+          - "'trackBtn' in citizen_track_response.content"
+        fail_msg: "Public status tracking elements missing from track.html."
+        success_msg: "Public status tracking elements verified in track.html."
+
+    # ---------------------------------------------------------------------
+    # 7. Security Boundary Verification (Nginx Ingress Restrictions)
+    # ---------------------------------------------------------------------
+    - name: Verify Nginx blocks public access to Actuator management endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/actuator/health"
+        status_code: 403
+      register: actuator_security_check
+      failed_when: actuator_security_check.status != 403
+
+    - name: Verify Nginx blocks public access to unauthenticated reviewer portal
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/reviewer.html"
+        status_code: 403
+      register: reviewer_portal_security_check
+      failed_when: reviewer_portal_security_check.status != 403
+
+    - name: Verify Nginx blocks public access to reviewer administrative API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ nginx_port }}/api/v1/reviewer/requests"
+        status_code: 403
+      register: reviewer_api_security_check
+      failed_when: reviewer_api_security_check.status != 403
+
+    # ---------------------------------------------------------------------
+    # 8. Detailed Verification Summary
+    # ---------------------------------------------------------------------
+    - name: Display Comprehensive Verification Report
+      ansible.builtin.debug:
+        msg:
+          - "========================================================================="
+          - " VERIFICATION SUMMARY: RTI Request Tracking System"
+          - " Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - " Container 'rti-mysql': {{ mysql_container_state.stdout }} (Health: {{ mysql_health_status.stdout }})"
+          - " Container 'rti-app':   {{ app_container_state.stdout }} (Health: {{ app_health_status.stdout }})"
+          - " Container 'rti-nginx': {{ nginx_container_state.stdout }} (Routing: Active on port {{ nginx_port }})"
+          - " Named Volume: 'rti_mysql_data' active and verified"
+          - " Citizen Submission Interface: Reachable (HTTP 200, Form Verified)"
+          - " Citizen Tracking Interface:   Reachable (HTTP 200, Inputs Verified)"
+          - " Actuator Endpoint (/actuator/): Blocked (HTTP 403 Verified)"
+          - " Reviewer Portal (/reviewer.html): Blocked (HTTP 403 Verified)"
+          - "-------------------------------------------------------------------------"
+          - " ARCHITECTURAL NOTE: Service reachability and HTTP 200 responses"
+          - " confirm network ingress and container health. End-to-end business"
+          - " workflows (application submission, tracking tokens, triage, remarks)"
+          - " are formally validated by the Selenium E2E automated test suite."
+          - "========================================================================="

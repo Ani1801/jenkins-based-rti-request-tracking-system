@@ -1,0 +1,6 @@
+---
+# =========================================================================
+# Top-Level Entrypoint: deploy.yml (Imports playbooks/deploy.yml)
+# =========================================================================
+
+- import_playbook: playbooks/deploy.yml

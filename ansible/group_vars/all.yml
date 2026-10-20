@@ -1,0 +1,30 @@
+# =========================================================================
+# Global Group Variables: RTI Request Tracking System Deployment
+# Non-sensitive configuration parameters (safe for source control)
+# =========================================================================
+
+# Application identification
+app_name: rti-request-tracking-system
+app_version: 1.0.0
+
+# Remote deployment target directory on the Linux host
+deployment_dir: /opt/rti-request-tracking-system
+
+# User and group ownership for deployment directory
+deploy_user: "{{ ansible_user | default('deploy_user') }}"
+deploy_group: "{{ ansible_user | default('deploy_user') }}"
+
+# Database settings (Non-sensitive defaults)
+db_name: rti_db
+db_user: rti_user
+db_port: 3306
+
+# Nginx reverse proxy host ingress port
+nginx_port: 80
+
+# Spring Boot internal port
+app_internal_port: 8080
+
+# Health check parameters
+health_check_retries: 20
+health_check_delay: 5
